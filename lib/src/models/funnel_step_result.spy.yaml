@@ -1,0 +1,12 @@
+### 퍼널 단계 결과
+### 테이블 없음 - API 직렬화 전용
+class: FunnelStepResult
+fields:
+  ### 단계 이름
+  stepName: String
+  ### 해당 단계 사용자 수
+  users: int
+  ### 이전 단계 대비 전환율 (%)
+  conversionRate: double
+  ### 이전 단계 대비 이탈율 (%)
+  dropoffRate: double

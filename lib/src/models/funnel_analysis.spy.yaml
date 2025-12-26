@@ -1,0 +1,10 @@
+### 퍼널 분석 결과
+### 테이블 없음 - API 직렬화 전용
+class: FunnelAnalysis
+fields:
+  ### 퍼널 단계 목록
+  steps: List<FunnelStepResult>
+  ### 전체 전환율 (%)
+  overallConversionRate: double
+  ### 분석 기간 (일)
+  periodDays: int

@@ -1,0 +1,24 @@
+### ClickHouse 이벤트 배치 상태
+### 이벤트 배치 전송 추적용
+class: ClickHouseBatchStatus
+table: serverpod_clickhouse_batch_status
+fields:
+  ### 배치 고유 ID
+  batchId: String
+  ### 배치 내 이벤트 수
+  eventCount: int
+  ### 배치 생성 시간
+  createdAt: DateTime
+  ### 배치 전송 시간 (전송 후)
+  sentAt: DateTime?
+  ### 배치 상태: buffered, sending, sent, failed
+  status: String
+  ### 재시도 횟수
+  retryCount: int, default=0
+  ### 오류 메시지 (실패 시)
+  errorMessage: String?
+indexes:
+  batch_status_idx:
+    fields: status
+  batch_created_idx:
+    fields: createdAt

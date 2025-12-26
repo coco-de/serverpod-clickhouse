@@ -1,0 +1,22 @@
+### ClickHouse 동기화 로그
+### PostgreSQL에 저장되어 동기화 상태를 추적합니다.
+class: ClickHouseSyncLog
+table: serverpod_clickhouse_sync_log
+fields:
+  ### 동기화 대상 테이블명
+  tableName: String
+  ### 마지막 동기화 시간
+  lastSyncedAt: DateTime
+  ### 동기화된 행 수
+  rowsSynced: int
+  ### 동기화 상태: pending, running, completed, failed
+  status: String
+  ### 오류 메시지 (실패 시)
+  errorMessage: String?
+  ### 동기화 소요 시간 (밀리초)
+  durationMs: int?
+indexes:
+  sync_log_table_idx:
+    fields: tableName
+  sync_log_status_idx:
+    fields: status

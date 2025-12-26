@@ -1,0 +1,12 @@
+### 분석 메트릭 결과 (API 응답용)
+### 테이블 없음 - API 직렬화 전용
+class: AnalyticsMetric
+fields:
+  ### 메트릭 날짜
+  date: DateTime
+  ### 메트릭 이름 (dau, wau, mau, revenue 등)
+  name: String
+  ### 메트릭 값
+  value: double
+  ### 추가 속성 (JSON 문자열)
+  metadata: String?
