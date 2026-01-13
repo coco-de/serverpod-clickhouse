@@ -584,6 +584,218 @@ class AnalyticsQueryBuilder {
   }
 
   // ============================================================================
+  // 최적화된 쿼리 (argMax/argAndMax 활용 - FINAL 회피)
+  // ============================================================================
+
+  /// 최고 매출일 조회 (argAndMax 활용)
+  ///
+  /// 한 번의 쿼리로 최고 매출과 해당 날짜를 동시에 반환합니다.
+  /// ClickHouse 25.11+ 필요
+  ///
+  /// 참고: https://clickhouse.com/blog/new-functions-2025
+  Future<ClickHouseResult> topRevenueDay({
+    String revenueTable = 'orders',
+    int days = 30,
+  }) async {
+    return _client.query('''
+      SELECT
+        argMax(date, revenue) AS top_date,
+        max(revenue) AS top_revenue
+      FROM (
+        SELECT
+          toDate(created_at) AS date,
+          sum(total_amount) AS revenue
+        FROM $revenueTable
+        WHERE created_at >= now() - INTERVAL {days} DAY
+          AND status = 'completed'
+        GROUP BY date
+      )
+    ''', params: {'days': days});
+  }
+
+  /// 최저 매출일 조회 (argAndMin 활용)
+  Future<ClickHouseResult> lowestRevenueDay({
+    String revenueTable = 'orders',
+    int days = 30,
+  }) async {
+    return _client.query('''
+      SELECT
+        argMin(date, revenue) AS lowest_date,
+        min(revenue) AS lowest_revenue
+      FROM (
+        SELECT
+          toDate(created_at) AS date,
+          sum(total_amount) AS revenue
+        FROM $revenueTable
+        WHERE created_at >= now() - INTERVAL {days} DAY
+          AND status = 'completed'
+        GROUP BY date
+      )
+    ''', params: {'days': days});
+  }
+
+  /// 사용자별 최신 상태 조회 (argMax - FINAL 회피)
+  ///
+  /// ReplacingMergeTree 테이블에서 FINAL 대신 argMax를 사용하여
+  /// 최신 상태를 효율적으로 조회합니다.
+  ///
+  /// 참고: https://clickhouse.com/blog/highlevel
+  Future<ClickHouseResult> latestUserState({
+    required String stateTable,
+    required List<String> userIds,
+    String versionColumn = 'updated_at',
+    List<String> selectColumns = const ['*'],
+  }) async {
+    final columns = selectColumns.map((col) {
+      if (col == '*') return col;
+      return "argMax($col, $versionColumn) AS $col";
+    }).join(', ');
+
+    return _client.query('''
+      SELECT
+        user_id,
+        $columns
+      FROM $stateTable
+      WHERE user_id IN ({user_ids})
+      GROUP BY user_id
+    ''', params: {'user_ids': userIds});
+  }
+
+  /// 이벤트별 최초 발생 시간 조회
+  Future<ClickHouseResult> firstEventTime({
+    required List<String> eventNames,
+    int days = 30,
+  }) async {
+    return _client.query('''
+      SELECT
+        event_name,
+        argMin(timestamp, timestamp) AS first_time,
+        argMin(user_id, timestamp) AS first_user
+      FROM $_eventsTable
+      WHERE event_name IN ({events})
+        AND timestamp >= now() - INTERVAL {days} DAY
+      GROUP BY event_name
+    ''', params: {
+      'events': eventNames,
+      'days': days,
+    });
+  }
+
+  /// 사용자별 가장 많이 사용한 기능 조회
+  Future<ClickHouseResult> topFeatureByUser({
+    required List<String> userIds,
+    int days = 30,
+    int limit = 5,
+  }) async {
+    return _client.query('''
+      SELECT
+        user_id,
+        argMax(event_name, event_count) AS top_feature,
+        max(event_count) AS usage_count
+      FROM (
+        SELECT
+          user_id,
+          event_name,
+          count() AS event_count
+        FROM $_eventsTable
+        WHERE user_id IN ({user_ids})
+          AND timestamp >= now() - INTERVAL {days} DAY
+        GROUP BY user_id, event_name
+      )
+      GROUP BY user_id
+    ''', params: {
+      'user_ids': userIds,
+      'days': days,
+    });
+  }
+
+  // ============================================================================
+  // 배치 조회 유틸리티 (WHERE + IN 패턴 - 메모리 최적화)
+  // ============================================================================
+
+  /// 대용량 사용자 이벤트 배치 조회
+  ///
+  /// JOIN 대신 WHERE + IN을 사용하여 메모리 사용량을 99% 절감합니다.
+  /// (30GB → 300MB, Chartmetric 사례 참고)
+  ///
+  /// 참고: https://clickhouse.com/blog/chartmetric-scaling-music-analytics
+  Future<List<ClickHouseResult>> batchQuery({
+    required List<String> ids,
+    required String sql,
+    String paramName = 'ids',
+    int batchSize = 1000,
+  }) async {
+    final results = <ClickHouseResult>[];
+
+    for (var i = 0; i < ids.length; i += batchSize) {
+      final batch = ids.skip(i).take(batchSize).toList();
+      final result = await _client.query(
+        sql,
+        params: {paramName: batch},
+      );
+      results.add(result);
+    }
+
+    return results;
+  }
+
+  /// 사용자 이벤트 배치 조회
+  Future<List<ClickHouseResult>> userEventsBatch({
+    required List<String> userIds,
+    List<String>? eventNames,
+    int days = 7,
+    int batchSize = 1000,
+  }) async {
+    final eventFilter = eventNames != null && eventNames.isNotEmpty
+        ? "AND event_name IN (${eventNames.map((e) => "'$e'").join(', ')})"
+        : '';
+
+    return batchQuery(
+      ids: userIds,
+      batchSize: batchSize,
+      sql: '''
+        SELECT
+          user_id,
+          event_name,
+          timestamp,
+          properties
+        FROM $_eventsTable
+        WHERE user_id IN ({ids})
+          AND timestamp >= now() - INTERVAL $days DAY
+          $eventFilter
+        ORDER BY timestamp
+      ''',
+    );
+  }
+
+  /// 사용자 세션 배치 조회
+  Future<List<ClickHouseResult>> userSessionsBatch({
+    required List<String> userIds,
+    int days = 7,
+    int batchSize = 1000,
+  }) async {
+    return batchQuery(
+      ids: userIds,
+      batchSize: batchSize,
+      sql: '''
+        SELECT
+          user_id,
+          session_id,
+          min(timestamp) AS session_start,
+          max(timestamp) AS session_end,
+          count() AS event_count,
+          dateDiff('second', min(timestamp), max(timestamp)) AS session_duration_sec
+        FROM $_eventsTable
+        WHERE user_id IN ({ids})
+          AND timestamp >= now() - INTERVAL $days DAY
+          AND session_id != ''
+        GROUP BY user_id, session_id
+        ORDER BY session_start
+      ''',
+    );
+  }
+
+  // ============================================================================
   // 커스텀 쿼리
   // ============================================================================
 

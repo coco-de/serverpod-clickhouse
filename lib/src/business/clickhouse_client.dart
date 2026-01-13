@@ -231,6 +231,38 @@ class ClickHouseClient {
     }
   }
 
+  // ============================================================================
+  // 세션 설정 (25.9+ 성능 최적화)
+  // ============================================================================
+
+  /// Streaming Secondary Indices 활성화
+  ///
+  /// ClickHouse 25.9+에서 인덱스 평가를 데이터 읽기와 동시에 수행하여
+  /// 4배 이상 성능 향상, 50% 메모리 절감, LIMIT 쿼리 조기 종료를 지원합니다.
+  ///
+  /// 참고: https://clickhouse.com/blog/streaming-secondary-indices
+  Future<void> enableStreamingIndices() async {
+    await execute('SET use_skip_indexes_on_data_read = 1');
+  }
+
+  /// 세션 설정 일괄 적용
+  Future<void> applySettings(Map<String, dynamic> settings) async {
+    for (final entry in settings.entries) {
+      await execute('SET ${entry.key} = ${_escapeValue(entry.value)}');
+    }
+  }
+
+  /// 권장 성능 설정 적용 (대시보드/분석 워크로드용)
+  ///
+  /// - streaming indices: 인덱스 성능 최적화
+  /// - optimize_read_in_order: ORDER BY 최적화
+  Future<void> applyRecommendedSettings() async {
+    await applySettings({
+      'use_skip_indexes_on_data_read': 1,
+      'optimize_read_in_order': 1,
+    });
+  }
+
   /// 테이블 존재 여부 확인
   Future<bool> tableExists(String table) async {
     final result = await query(
