@@ -639,15 +639,32 @@ class AnalyticsQueryBuilder {
   /// ReplacingMergeTree 테이블에서 FINAL 대신 argMax를 사용하여
   /// 최신 상태를 효율적으로 조회합니다.
   ///
+  /// [selectColumns]에 조회할 컬럼 목록을 지정합니다.
+  /// 빈 리스트나 ['*']는 허용되지 않습니다 - 명시적으로 컬럼을 지정해야 합니다.
+  ///
   /// 참고: https://clickhouse.com/blog/highlevel
   Future<ClickHouseResult> latestUserState({
     required String stateTable,
     required List<String> userIds,
+    required List<String> selectColumns,
     String versionColumn = 'updated_at',
-    List<String> selectColumns = const ['*'],
   }) async {
+    if (selectColumns.isEmpty) {
+      throw ArgumentError('selectColumns cannot be empty');
+    }
+    if (selectColumns.contains('*')) {
+      throw ArgumentError(
+        'selectColumns cannot contain "*". Please specify columns explicitly.',
+      );
+    }
+    if (!_isValidIdentifier(stateTable)) {
+      throw ArgumentError('Invalid table name: $stateTable');
+    }
+
     final columns = selectColumns.map((col) {
-      if (col == '*') return col;
+      if (!_isValidIdentifier(col)) {
+        throw ArgumentError('Invalid column name: $col');
+      }
       return "argMax($col, $versionColumn) AS $col";
     }).join(', ');
 
@@ -681,17 +698,50 @@ class AnalyticsQueryBuilder {
     });
   }
 
-  /// 사용자별 가장 많이 사용한 기능 조회
+  /// 사용자별 가장 많이 사용한 기능 TOP N 조회
+  ///
+  /// [topN]을 지정하면 각 사용자별 상위 N개 기능을 반환합니다.
+  /// 기본값 1은 가장 많이 사용한 기능 1개만 반환합니다.
   Future<ClickHouseResult> topFeatureByUser({
     required List<String> userIds,
     int days = 30,
-    int limit = 5,
+    int topN = 1,
   }) async {
+    if (topN < 1) {
+      throw ArgumentError('topN must be at least 1');
+    }
+
+    if (topN == 1) {
+      // 단일 최상위 기능만 조회 (argMax 최적화)
+      return _client.query('''
+        SELECT
+          user_id,
+          argMax(event_name, event_count) AS top_feature,
+          max(event_count) AS usage_count
+        FROM (
+          SELECT
+            user_id,
+            event_name,
+            count() AS event_count
+          FROM $_eventsTable
+          WHERE user_id IN ({user_ids})
+            AND timestamp >= now() - INTERVAL {days} DAY
+          GROUP BY user_id, event_name
+        )
+        GROUP BY user_id
+      ''', params: {
+        'user_ids': userIds,
+        'days': days,
+      });
+    }
+
+    // 상위 N개 기능 조회
     return _client.query('''
       SELECT
         user_id,
-        argMax(event_name, event_count) AS top_feature,
-        max(event_count) AS usage_count
+        event_name AS top_feature,
+        event_count AS usage_count,
+        row_number() OVER (PARTITION BY user_id ORDER BY event_count DESC) AS rank
       FROM (
         SELECT
           user_id,
@@ -702,10 +752,12 @@ class AnalyticsQueryBuilder {
           AND timestamp >= now() - INTERVAL {days} DAY
         GROUP BY user_id, event_name
       )
-      GROUP BY user_id
+      QUALIFY rank <= {top_n}
+      ORDER BY user_id, rank
     ''', params: {
       'user_ids': userIds,
       'days': days,
+      'top_n': topN,
     });
   }
 
@@ -724,35 +776,75 @@ class AnalyticsQueryBuilder {
     required String sql,
     String paramName = 'ids',
     int batchSize = 1000,
+    Map<String, dynamic>? additionalParams,
   }) async {
+    if (batchSize < 1) {
+      throw ArgumentError('batchSize must be at least 1');
+    }
+
     final results = <ClickHouseResult>[];
 
     for (var i = 0; i < ids.length; i += batchSize) {
       final batch = ids.skip(i).take(batchSize).toList();
-      final result = await _client.query(
-        sql,
-        params: {paramName: batch},
-      );
+      final params = <String, dynamic>{paramName: batch};
+      if (additionalParams != null) {
+        params.addAll(additionalParams);
+      }
+      final result = await _client.query(sql, params: params);
       results.add(result);
     }
 
     return results;
   }
 
+  /// 배치 쿼리 결과 병합
+  ///
+  /// [batchQuery] 등에서 반환된 여러 결과를 단일 결과로 병합합니다.
+  ClickHouseResult mergeResults(List<ClickHouseResult> results) {
+    if (results.isEmpty) {
+      return ClickHouseResult(rows: []);
+    }
+
+    final allRows = <Map<String, dynamic>>[];
+    var totalRowsRead = 0;
+    var totalBytesRead = 0;
+    var totalElapsed = Duration.zero;
+
+    for (final result in results) {
+      allRows.addAll(result.rows);
+      totalRowsRead += result.rowsRead;
+      totalBytesRead += result.bytesRead;
+      totalElapsed += result.elapsed;
+    }
+
+    return ClickHouseResult(
+      rows: allRows,
+      rowsRead: totalRowsRead,
+      bytesRead: totalBytesRead,
+      elapsed: totalElapsed,
+    );
+  }
+
   /// 사용자 이벤트 배치 조회
+  ///
+  /// [eventNames]가 제공되면 해당 이벤트만 필터링합니다.
+  /// SQL Injection 방지를 위해 파라미터 바인딩을 사용합니다.
   Future<List<ClickHouseResult>> userEventsBatch({
     required List<String> userIds,
     List<String>? eventNames,
     int days = 7,
     int batchSize = 1000,
   }) async {
-    final eventFilter = eventNames != null && eventNames.isNotEmpty
-        ? "AND event_name IN (${eventNames.map((e) => "'$e'").join(', ')})"
-        : '';
+    final hasEventFilter = eventNames != null && eventNames.isNotEmpty;
+    final eventFilterClause = hasEventFilter ? 'AND event_name IN ({event_names})' : '';
 
     return batchQuery(
       ids: userIds,
       batchSize: batchSize,
+      additionalParams: {
+        'days': days,
+        if (hasEventFilter) 'event_names': eventNames,
+      },
       sql: '''
         SELECT
           user_id,
@@ -761,8 +853,8 @@ class AnalyticsQueryBuilder {
           properties
         FROM $_eventsTable
         WHERE user_id IN ({ids})
-          AND timestamp >= now() - INTERVAL $days DAY
-          $eventFilter
+          AND timestamp >= now() - INTERVAL {days} DAY
+          $eventFilterClause
         ORDER BY timestamp
       ''',
     );
@@ -777,6 +869,7 @@ class AnalyticsQueryBuilder {
     return batchQuery(
       ids: userIds,
       batchSize: batchSize,
+      additionalParams: {'days': days},
       sql: '''
         SELECT
           user_id,
@@ -787,12 +880,23 @@ class AnalyticsQueryBuilder {
           dateDiff('second', min(timestamp), max(timestamp)) AS session_duration_sec
         FROM $_eventsTable
         WHERE user_id IN ({ids})
-          AND timestamp >= now() - INTERVAL $days DAY
+          AND timestamp >= now() - INTERVAL {days} DAY
           AND session_id != ''
         GROUP BY user_id, session_id
         ORDER BY session_start
       ''',
     );
+  }
+
+  // ============================================================================
+  // 유틸리티
+  // ============================================================================
+
+  /// 식별자(테이블명, 컬럼명) 유효성 검사
+  ///
+  /// SQL Injection 방지를 위해 알파벳, 숫자, 언더스코어만 허용합니다.
+  bool _isValidIdentifier(String identifier) {
+    return RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$').hasMatch(identifier);
   }
 
   // ============================================================================

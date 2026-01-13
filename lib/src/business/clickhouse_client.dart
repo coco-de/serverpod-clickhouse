@@ -235,29 +235,101 @@ class ClickHouseClient {
   // 세션 설정 (25.9+ 성능 최적화)
   // ============================================================================
 
+  /// ClickHouse 서버 버전 조회
+  ///
+  /// 반환 형식: "25.9.1.123" 등
+  Future<String> getServerVersion() async {
+    final result = await query('SELECT version() AS version');
+    return result.firstOrNull?['version'] as String? ?? '';
+  }
+
+  /// 최소 버전 요구사항 확인
+  ///
+  /// [requiredVersion]은 "25.9" 또는 "25.9.1" 형식입니다.
+  /// 서버 버전이 요구 버전 이상이면 true를 반환합니다.
+  Future<bool> meetsMinimumVersion(String requiredVersion) async {
+    try {
+      final serverVersion = await getServerVersion();
+      return _compareVersions(serverVersion, requiredVersion) >= 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 버전 비교 (-1: a < b, 0: a == b, 1: a > b)
+  int _compareVersions(String a, String b) {
+    final aParts = a.split('.').map((p) => int.tryParse(p) ?? 0).toList();
+    final bParts = b.split('.').map((p) => int.tryParse(p) ?? 0).toList();
+
+    final maxLength =
+        aParts.length > bParts.length ? aParts.length : bParts.length;
+
+    for (var i = 0; i < maxLength; i++) {
+      final aVal = i < aParts.length ? aParts[i] : 0;
+      final bVal = i < bParts.length ? bParts[i] : 0;
+
+      if (aVal < bVal) return -1;
+      if (aVal > bVal) return 1;
+    }
+
+    return 0;
+  }
+
   /// Streaming Secondary Indices 활성화
   ///
   /// ClickHouse 25.9+에서 인덱스 평가를 데이터 읽기와 동시에 수행하여
   /// 4배 이상 성능 향상, 50% 메모리 절감, LIMIT 쿼리 조기 종료를 지원합니다.
   ///
+  /// 25.9 미만 버전에서는 설정이 무시됩니다 (에러 없이 진행).
+  ///
   /// 참고: https://clickhouse.com/blog/streaming-secondary-indices
-  Future<void> enableStreamingIndices() async {
-    await execute('SET use_skip_indexes_on_data_read = 1');
+  Future<bool> enableStreamingIndices() async {
+    try {
+      await execute('SET use_skip_indexes_on_data_read = 1');
+      return true;
+    } on ClickHouseException catch (e) {
+      // 설정이 지원되지 않는 버전에서는 무시
+      if (e.details?.contains('Unknown setting') ?? false) {
+        return false;
+      }
+      rethrow;
+    }
   }
 
   /// 세션 설정 일괄 적용
-  Future<void> applySettings(Map<String, dynamic> settings) async {
+  ///
+  /// 지원되지 않는 설정은 건너뜁니다.
+  /// 반환값: 성공적으로 적용된 설정 목록
+  Future<List<String>> applySettings(
+    Map<String, dynamic> settings, {
+    bool throwOnError = false,
+  }) async {
+    final applied = <String>[];
+
     for (final entry in settings.entries) {
-      await execute('SET ${entry.key} = ${_escapeValue(entry.value)}');
+      try {
+        await execute('SET ${entry.key} = ${_escapeValue(entry.value)}');
+        applied.add(entry.key);
+      } on ClickHouseException catch (e) {
+        if (throwOnError) rethrow;
+        // Unknown setting 에러는 무시 (버전 호환성)
+        if (!(e.details?.contains('Unknown setting') ?? false)) {
+          rethrow;
+        }
+      }
     }
+
+    return applied;
   }
 
   /// 권장 성능 설정 적용 (대시보드/분석 워크로드용)
   ///
-  /// - streaming indices: 인덱스 성능 최적화
+  /// - streaming indices: 인덱스 성능 최적화 (25.9+)
   /// - optimize_read_in_order: ORDER BY 최적화
-  Future<void> applyRecommendedSettings() async {
-    await applySettings({
+  ///
+  /// 반환값: 성공적으로 적용된 설정 목록
+  Future<List<String>> applyRecommendedSettings() async {
+    return applySettings({
       'use_skip_indexes_on_data_read': 1,
       'optimize_read_in_order': 1,
     });

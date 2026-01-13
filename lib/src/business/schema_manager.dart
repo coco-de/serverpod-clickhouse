@@ -299,6 +299,37 @@ class SchemaManager {
     String? partitionBy,
     int? ttlDays,
   }) async {
+    // 입력값 검증
+    if (!_isValidIdentifier(tableName)) {
+      throw ArgumentError('Invalid table name: $tableName');
+    }
+    if (columns.isEmpty) {
+      throw ArgumentError('columns cannot be empty');
+    }
+    if (sumColumns.isEmpty) {
+      throw ArgumentError('sumColumns cannot be empty');
+    }
+    if (orderBy.isEmpty) {
+      throw ArgumentError('orderBy cannot be empty');
+    }
+
+    // 컬럼명 검증
+    for (final col in columns.keys) {
+      if (!_isValidIdentifier(col)) {
+        throw ArgumentError('Invalid column name: $col');
+      }
+    }
+    for (final col in sumColumns) {
+      if (!_isValidIdentifier(col)) {
+        throw ArgumentError('Invalid sum column name: $col');
+      }
+    }
+    for (final col in orderBy) {
+      if (!_isValidIdentifier(col)) {
+        throw ArgumentError('Invalid orderBy column name: $col');
+      }
+    }
+
     final columnDefs = columns.entries
         .map((e) => '${e.key} ${e.value}')
         .join(',\n        ');
@@ -319,6 +350,11 @@ class SchemaManager {
       ORDER BY (${orderBy.join(', ')})
       $ttlClause
     ''');
+  }
+
+  /// 식별자(테이블명, 컬럼명) 유효성 검사
+  bool _isValidIdentifier(String identifier) {
+    return RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$').hasMatch(identifier);
   }
 }
 
@@ -354,6 +390,12 @@ class ProjectionManager {
     List<String>? selectColumns,
     String? where,
   }) async {
+    _validateIdentifier(table, 'table');
+    _validateIdentifier(name, 'projection name');
+    if (orderBy.isEmpty) {
+      throw ArgumentError('orderBy cannot be empty');
+    }
+
     final columns = selectColumns?.join(', ') ?? '*';
     final whereClause = where != null ? 'WHERE $where' : '';
 
@@ -383,6 +425,15 @@ class ProjectionManager {
     required List<String> groupBy,
     required List<String> aggregates,
   }) async {
+    _validateIdentifier(table, 'table');
+    _validateIdentifier(name, 'projection name');
+    if (groupBy.isEmpty) {
+      throw ArgumentError('groupBy cannot be empty');
+    }
+    if (aggregates.isEmpty) {
+      throw ArgumentError('aggregates cannot be empty');
+    }
+
     await _client.execute('''
       ALTER TABLE $table ADD PROJECTION IF NOT EXISTS $name (
         SELECT
@@ -397,6 +448,9 @@ class ProjectionManager {
   ///
   /// 프로젝션 추가 후 기존 데이터에도 적용하려면 이 메서드를 호출합니다.
   Future<void> materializeProjection(String table, String name) async {
+    _validateIdentifier(table, 'table');
+    _validateIdentifier(name, 'projection name');
+
     await _client.execute('''
       ALTER TABLE $table MATERIALIZE PROJECTION $name
     ''');
@@ -404,9 +458,27 @@ class ProjectionManager {
 
   /// 프로젝션 삭제
   Future<void> dropProjection(String table, String name) async {
+    _validateIdentifier(table, 'table');
+    _validateIdentifier(name, 'projection name');
+
     await _client.execute('''
       ALTER TABLE $table DROP PROJECTION IF EXISTS $name
     ''');
+  }
+
+  /// 프로젝션 존재 여부 확인
+  Future<bool> projectionExists(String table, String name) async {
+    final result = await _client.query('''
+      SELECT 1
+      FROM system.projections
+      WHERE table = {table} AND database = {db} AND name = {name}
+    ''', params: {
+      'table': table,
+      'db': _client.config.database,
+      'name': name,
+    });
+
+    return result.isNotEmpty;
   }
 
   /// 테이블의 프로젝션 목록 조회
@@ -428,8 +500,10 @@ class ProjectionManager {
   /// 다음 프로젝션을 생성합니다:
   /// - by_event_name: 이벤트명으로 빠른 조회
   /// - by_session: 세션별 빠른 조회
-  /// - recent_events: 최근 7일 이벤트 빠른 조회
+  /// - daily_event_counts: 일별 이벤트 카운트 집계
   Future<void> addDefaultEventProjections(String table) async {
+    _validateIdentifier(table, 'table');
+
     // 이벤트명 기준 정렬
     await addProjection(
       table,
@@ -451,6 +525,13 @@ class ProjectionManager {
       groupBy: ['toDate(timestamp) AS date', 'event_name'],
       aggregates: ['count() AS event_count', 'uniq(user_id) AS unique_users'],
     );
+  }
+
+  /// 식별자 유효성 검사
+  void _validateIdentifier(String identifier, String fieldName) {
+    if (!RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$').hasMatch(identifier)) {
+      throw ArgumentError('Invalid $fieldName: $identifier');
+    }
   }
 }
 
