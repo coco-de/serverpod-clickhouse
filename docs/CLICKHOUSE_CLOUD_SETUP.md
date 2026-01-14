@@ -5,15 +5,16 @@ Serverpod 프로젝트에 ClickHouse Cloud와 ClickPipes CDC를 설정하는 가
 ## 목차
 
 1. [아키텍처 개요](#아키텍처-개요)
-2. [ClickHouse Cloud 설정](#1-clickhouse-cloud-설정)
-3. [RDS PostgreSQL CDC 설정](#2-rds-postgresql-cdc-설정)
-4. [ClickPipes CDC 설정](#3-clickpipes-cdc-설정)
-5. [Serverpod 서버 설정](#4-serverpod-서버-설정)
-6. [테이블 동기화 전략](#5-테이블-동기화-전략)
-7. [비용 예상](#6-비용-예상)
-8. [체크리스트](#7-체크리스트)
-9. [문제 해결](#8-문제-해결)
-10. [참고 자료](#9-참고-자료)
+2. [AWS Marketplace 구독 (권장)](#0-aws-marketplace-구독-권장)
+3. [ClickHouse Cloud 설정](#1-clickhouse-cloud-설정)
+4. [RDS PostgreSQL CDC 설정](#2-rds-postgresql-cdc-설정)
+5. [ClickPipes CDC 설정](#3-clickpipes-cdc-설정)
+6. [Serverpod 서버 설정](#4-serverpod-서버-설정)
+7. [테이블 동기화 전략](#5-테이블-동기화-전략)
+8. [비용 예상](#6-비용-예상)
+9. [체크리스트](#7-체크리스트)
+10. [문제 해결](#8-문제-해결)
+11. [참고 자료](#9-참고-자료)
 
 ---
 
@@ -45,6 +46,92 @@ Serverpod 프로젝트에 ClickHouse Cloud와 ClickPipes CDC를 설정하는 가
 |------|------|------|
 | App → Serverpod → ClickHouse | 이벤트 직접 전송 | 행동 분석, 클릭 추적 |
 | PostgreSQL → ClickPipes → ClickHouse | CDC 자동 동기화 | 매출 분석, 마스터 데이터 |
+
+---
+
+## 0. AWS Marketplace 구독 (권장)
+
+AWS 인프라를 사용 중이라면 **AWS Marketplace PAYG (Pay As You Go)** 방식을 권장합니다.
+
+### 결제 옵션 비교
+
+| 방식 | 장점 | 단점 |
+|------|------|------|
+| **AWS Marketplace PAYG** ⭐ | AWS 통합 결제, 기존 크레딧 사용 | - |
+| ClickHouse Cloud 직접 | $300 무료 크레딧 | 별도 결제 관리 |
+| GCP Marketplace | GCP 통합 결제 | AWS 사용 시 불편 |
+
+### Step 1: AWS Marketplace 구독
+
+```
+1. AWS Console 로그인
+2. 상단 검색: "AWS Marketplace Subscriptions"
+3. "Discover products" 클릭
+4. "ClickHouse Cloud" 검색
+5. "ClickHouse Cloud - Pay As You Go" 선택
+```
+
+### Step 2: 구독 진행
+
+```
+1. "View purchase options" 클릭
+2. 약관 검토 및 동의
+3. "Subscribe" 클릭
+4. 구독 활성화 대기 (1-2분)
+5. "Set up your account" 클릭
+6. ClickHouse Cloud로 리다이렉트
+```
+
+### Step 3: ClickHouse Cloud 계정 연결
+
+#### 새 계정인 경우
+
+```
+1. "Sign up" 선택
+2. 이메일, 비밀번호 입력
+3. Organization 이름 설정
+4. AWS Marketplace 연동 자동 완료
+```
+
+#### 기존 계정 연결
+
+```
+1. "Sign in" 선택
+2. 기존 ClickHouse Cloud 계정으로 로그인
+3. Organization 선택
+4. AWS Marketplace 연동 완료
+```
+
+### Step 4: 구독 확인
+
+**AWS Console에서 확인:**
+
+```
+AWS Console → AWS Marketplace → Manage subscriptions
+```
+
+| 확인 항목 | 예상 값 |
+|----------|---------|
+| 제품 | ClickHouse Cloud - Pay As You Go |
+| 상태 | Active |
+| 활성 계약 | 1개 |
+
+**ClickHouse Cloud에서 확인:**
+
+```
+ClickHouse Cloud Console
+→ 좌측 하단 Organization 클릭
+→ Settings → Billing
+→ "AWS Marketplace" 결제 방식 표시 확인
+```
+
+### 무료 평가판 안내
+
+- **기간**: 30일
+- **제한**: 사용량 제한 없음
+- **종료 후**: 자동으로 PAYG 결제 전환
+
+> **주의**: 평가판 종료 전에 서비스 계속 사용 여부를 결정하세요.
 
 ---
 
