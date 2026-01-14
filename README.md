@@ -322,6 +322,7 @@ serverpod_clickhouse/
 ## 문서
 
 - [BI 이벤트 가이드](docs/BI_EVENTS_GUIDE.md) - 이벤트 정의, Flutter 통합, 경로 분석
+- [ClickHouse Cloud 설정 가이드](docs/CLICKHOUSE_CLOUD_SETUP.md) - Cloud 설정, ClickPipes CDC 구성
 
 ## License
 

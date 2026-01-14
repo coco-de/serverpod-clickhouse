@@ -1,6 +1,5 @@
 import 'package:serverpod/serverpod.dart';
 
-import '../business/bi_events.dart';
 import '../service/clickhouse_service.dart';
 
 /// 이벤트 수집 Endpoint
@@ -25,12 +24,11 @@ class ClickHouseEventsEndpoint extends Endpoint {
     required String eventName,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.track(
       eventName,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
       context: await _extractContext(session),
@@ -53,14 +51,13 @@ class ClickHouseEventsEndpoint extends Endpoint {
     Session session,
     List<Map<String, dynamic>> events,
   ) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
     final context = await _extractContext(session);
 
     for (final event in events) {
       ClickHouseService.instance.tracker.track(
         event['name'] as String,
-        userId: userId?.toString(),
+        userId: userId,
         sessionId: session.sessionId.toString(),
         properties: event['properties'] as Map<String, dynamic>? ?? {},
         context: context,
@@ -77,12 +74,11 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String screenName, {
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackScreenView(
       screenName,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -98,12 +94,11 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? screenName,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackButtonClick(
       buttonName,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       screenName: screenName,
       properties: properties ?? {},
@@ -125,12 +120,11 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? currency,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackConversion(
       conversionType,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       value: value,
       currency: currency,
@@ -162,11 +156,10 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? referrer,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackAppOpened(
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       source: source,
       campaign: campaign,
@@ -183,11 +176,10 @@ class ClickHouseEventsEndpoint extends Endpoint {
     int? screenCount,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackAppClosed(
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       sessionDurationMs: sessionDurationMs,
       lastScreen: lastScreen,
@@ -202,11 +194,10 @@ class ClickHouseEventsEndpoint extends Endpoint {
     int? backgroundDurationMs,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackAppResumed(
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       backgroundDurationMs: backgroundDurationMs,
       properties: properties ?? {},
@@ -229,8 +220,7 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? flowName,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackNavigation(
       toScreen: toScreen,
@@ -238,7 +228,7 @@ class ClickHouseEventsEndpoint extends Endpoint {
       trigger: trigger,
       stepIndex: stepIndex,
       flowName: flowName,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -251,13 +241,12 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? entryPoint,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackFlowStarted(
       flowName: flowName,
       entryPoint: entryPoint,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -272,15 +261,14 @@ class ClickHouseEventsEndpoint extends Endpoint {
     bool? success,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackFlowCompleted(
       flowName: flowName,
       totalSteps: totalSteps,
       durationMs: durationMs,
       success: success,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -295,15 +283,14 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? reason,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackFlowAbandoned(
       flowName: flowName,
       abandonedAt: abandonedAt,
       stepIndex: stepIndex,
       reason: reason,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -322,15 +309,14 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? screenName,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackError(
       errorType: errorType,
       message: message,
       stackTrace: stackTrace,
       screenName: screenName,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -345,15 +331,14 @@ class ClickHouseEventsEndpoint extends Endpoint {
     int? durationMs,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackApiError(
       endpoint: endpoint,
       statusCode: statusCode,
       errorMessage: errorMessage,
       durationMs: durationMs,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -368,12 +353,11 @@ class ClickHouseEventsEndpoint extends Endpoint {
     Session session,
     Map<String, dynamic> userProperties,
   ) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.setUserProperties(
       userProperties,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
     );
   }
@@ -396,11 +380,10 @@ class ClickHouseEventsEndpoint extends Endpoint {
     Session session, {
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackLogout(
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -419,15 +402,14 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? label,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackTiming(
       category: category,
       variable: variable,
       durationMs: durationMs,
       label: label,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -443,8 +425,7 @@ class ClickHouseEventsEndpoint extends Endpoint {
     bool? success,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackApiCall(
       endpoint: endpoint,
@@ -452,7 +433,7 @@ class ClickHouseEventsEndpoint extends Endpoint {
       durationMs: durationMs,
       statusCode: statusCode,
       success: success,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -470,14 +451,13 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? category,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackSearch(
       query: query,
       resultCount: resultCount,
       category: category,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -496,15 +476,14 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? category,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackProductView(
       productId: productId,
       productName: productName,
       price: price,
       category: category,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -519,15 +498,14 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? productName,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackAddToCart(
       productId: productId,
       quantity: quantity,
       price: price,
       productName: productName,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -540,13 +518,12 @@ class ClickHouseEventsEndpoint extends Endpoint {
     int quantity = 1,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackRemoveFromCart(
       productId: productId,
       quantity: quantity,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -560,14 +537,13 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? currency,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackCheckoutStarted(
       totalAmount: totalAmount,
       itemCount: itemCount,
       currency: currency,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -582,15 +558,14 @@ class ClickHouseEventsEndpoint extends Endpoint {
     List<Map<String, dynamic>>? items,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackPurchase(
       orderId: orderId,
       amount: amount,
       currency: currency,
       items: items,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -608,14 +583,13 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? contentName,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackContentView(
       contentId: contentId,
       contentType: contentType,
       contentName: contentName,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -629,14 +603,13 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? contentId,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackShare(
       contentType: contentType,
       method: method,
       contentId: contentId,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -653,13 +626,12 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? title,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackPushReceived(
       campaignId: campaignId,
       title: title,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -672,13 +644,12 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? action,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackPushClicked(
       campaignId: campaignId,
       action: action,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
@@ -695,13 +666,12 @@ class ClickHouseEventsEndpoint extends Endpoint {
     String? screenName,
     Map<String, dynamic>? properties,
   }) async {
-    final authInfo = await session.authenticated;
-    final userId = authInfo?.userId;
+    final userId = session.authenticated?.userIdentifier;
 
     ClickHouseService.instance.tracker.trackFeatureUsed(
       featureName: featureName,
       screenName: screenName,
-      userId: userId?.toString(),
+      userId: userId,
       sessionId: session.sessionId.toString(),
       properties: properties ?? {},
     );
